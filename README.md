@@ -76,3 +76,8 @@ npm run dev
 npm test
 npm run check
 ```
+
+## Credits
+
+[hunshcn/gh-proxy](https://github.com/hunshcn/gh-proxy): for GitHub proxy. 
+
