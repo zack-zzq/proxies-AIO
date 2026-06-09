@@ -28,6 +28,13 @@ const GITHUB_ALLOWED_HOSTS = new Set([
   "www.github.com"
 ]);
 const DOCKER_AUTH_ORIGIN = "https://auth.docker.io";
+const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#e3f3f0"/>
+  <path d="M19 44V25a9 9 0 0 1 9-9h17" fill="none" stroke="#0f766e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M21 48h16a9 9 0 0 0 9-9V20" fill="none" stroke="#0f766e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="19" cy="48" r="5" fill="#0f766e"/>
+  <circle cx="45" cy="16" r="5" fill="#0f766e"/>
+</svg>`;
 
 const CONFIG = normalizeProxyConfig(proxyConfig);
 
@@ -41,6 +48,10 @@ export default {
 
     if (url.pathname === "/" || url.pathname === "/index.html") {
       return renderHome(url, CONFIG, request);
+    }
+
+    if (url.pathname === "/favicon.svg" || url.pathname === "/favicon.ico") {
+      return faviconResponse();
     }
 
     if (url.pathname === "/api/proxies") {
@@ -616,15 +627,41 @@ function htmlResponse(body, { status = 200, request } = {}) {
   });
 }
 
+function faviconResponse() {
+  return new Response(FAVICON_SVG, {
+    headers: {
+      "content-type": "image/svg+xml; charset=utf-8",
+      "cache-control": "public, max-age=604800"
+    }
+  });
+}
+
 function renderHome(url, config, request) {
-  const rows = publicProxyList(url.origin, config.proxies)
+  const proxies = publicProxyList(url.origin, config.proxies);
+  const specialCount = proxies.filter((proxy) => proxy.type !== "default").length;
+  const defaultCount = proxies.length - specialCount;
+  const typeFilters = ["default", "pixiv", "github", "docker"]
+    .map((type) => {
+      const count = proxies.filter((proxy) => proxy.type === type).length;
+      return count > 0
+        ? `<button class="filter-button" type="button" data-filter="${escapeAttribute(type)}">${escapeHtml(type)} <span>${count}</span></button>`
+        : "";
+    })
+    .join("");
+  const rows = proxies
     .map((proxy) => renderProxyRow(proxy))
     .join("");
 
   const configErrors = config.errors.length > 0
-    ? `<section class="notice"><strong>Configuration errors</strong><ul>${config.errors
+    ? `<section class="notice" aria-live="polite">
+        <div class="notice-icon" aria-hidden="true">${renderIcon("alert")}</div>
+        <div>
+          <strong>Configuration errors</strong>
+          <ul>${config.errors
         .map((error) => `<li>${escapeHtml(error)}</li>`)
-        .join("")}</ul></section>`
+        .join("")}</ul>
+        </div>
+      </section>`
     : "";
 
   return htmlResponse(
@@ -634,18 +671,30 @@ function renderHome(url, config, request) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Proxies AIO</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <style>
     :root {
       color-scheme: light;
-      --bg: #f6f7f9;
-      --panel: #ffffff;
-      --line: #d9dee7;
-      --text: #111827;
-      --muted: #5f6b7a;
+      --bg: #f4f7f8;
+      --bg-strong: #eaf0f2;
+      --surface: #ffffff;
+      --surface-soft: #f8fbfb;
+      --line: #d9e2e5;
+      --line-soft: #e8eef0;
+      --text: #101828;
+      --muted: #667085;
+      --muted-strong: #475467;
       --accent: #0f766e;
-      --accent-soft: #d9f3ef;
+      --accent-strong: #0b5f59;
+      --accent-soft: #e3f3f0;
+      --blue: #2563eb;
+      --blue-soft: #e8f0ff;
+      --amber: #b7791f;
+      --amber-soft: #fff6df;
       --danger: #b42318;
       --danger-soft: #fff1f0;
+      --shadow: 0 18px 48px rgba(16, 24, 40, 0.08);
+      --radius: 8px;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
@@ -656,59 +705,140 @@ function renderHome(url, config, request) {
     body {
       margin: 0;
       min-height: 100vh;
-      background: var(--bg);
+      background:
+        linear-gradient(180deg, rgba(234, 240, 242, 0.88) 0%, rgba(244, 247, 248, 0.92) 260px, var(--bg) 100%);
       color: var(--text);
+      text-rendering: optimizeLegibility;
     }
 
     main {
-      width: min(1080px, calc(100% - 32px));
+      width: min(1180px, calc(100% - 32px));
       margin: 0 auto;
-      padding: 40px 0 56px;
+      padding: 34px 0 56px;
     }
 
     header {
       display: flex;
-      align-items: flex-end;
+      align-items: center;
       justify-content: space-between;
       gap: 24px;
-      padding-bottom: 24px;
-      border-bottom: 1px solid var(--line);
+      margin-bottom: 24px;
     }
 
-    h1 {
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 46px;
+      height: 46px;
+      border: 1px solid rgba(15, 118, 110, 0.18);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, #ffffff 0%, #eef9f6 100%);
+      color: var(--accent);
+      box-shadow: 0 10px 24px rgba(15, 118, 110, 0.12);
+      flex: 0 0 auto;
+    }
+
+    .brand svg,
+    .icon-button svg,
+    .search-box svg,
+    .notice-icon svg,
+    .empty-icon svg,
+    .back-link svg {
+      width: 18px;
+      height: 18px;
+      stroke-width: 1.8;
+    }
+
+    h1,
+    h2,
+    p {
       margin: 0;
-      font-size: clamp(30px, 6vw, 52px);
-      line-height: 1;
       letter-spacing: 0;
     }
 
-    .meta {
-      margin-top: 10px;
-      color: var(--muted);
-      font-size: 15px;
+    h1 {
+      font-size: clamp(26px, 4vw, 38px);
+      line-height: 1.05;
+      font-weight: 760;
     }
 
-    .count {
-      flex: 0 0 auto;
-      display: inline-flex;
+    .meta {
+      display: flex;
       align-items: center;
-      min-height: 36px;
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
+      gap: 8px;
+      margin-top: 7px;
       color: var(--muted);
       font-size: 14px;
-      white-space: nowrap;
+    }
+
+    .meta-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #16a34a;
+      box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.12);
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(92px, 1fr));
+      gap: 10px;
+      min-width: min(420px, 42vw);
+    }
+
+    .stat {
+      min-height: 72px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: 0 10px 26px rgba(16, 24, 40, 0.05);
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      margin-top: 6px;
+      color: var(--text);
+      font-size: 24px;
+      font-weight: 760;
+      line-height: 1;
     }
 
     .notice {
-      margin-top: 22px;
+      display: flex;
+      gap: 12px;
+      margin-bottom: 18px;
       padding: 14px 16px;
-      border: 1px solid #f1b8b2;
-      border-radius: 8px;
+      border: 1px solid #f0bbb4;
+      border-radius: var(--radius);
       background: var(--danger-soft);
       color: var(--danger);
+      font-size: 14px;
+    }
+
+    .notice-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: var(--radius);
+      background: #ffffff;
+      flex: 0 0 auto;
     }
 
     .notice ul {
@@ -716,66 +846,251 @@ function renderHome(url, config, request) {
       padding-left: 20px;
     }
 
-    .proxy-list {
-      margin-top: 24px;
+    .panel {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius);
       overflow: hidden;
-      background: var(--panel);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line-soft);
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    h2 {
+      font-size: 18px;
+      line-height: 1.2;
+      font-weight: 720;
+    }
+
+    .panel-subtitle {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+      min-width: min(300px, 100%);
+      color: var(--muted);
+    }
+
+    .search-box svg {
+      position: absolute;
+      left: 12px;
+      pointer-events: none;
+    }
+
+    .search-box input {
+      width: 100%;
+      height: 38px;
+      padding: 0 13px 0 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-soft);
+      color: var(--text);
+      font: 14px/1.2 inherit;
+      outline: none;
+      transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+    }
+
+    .search-box input:focus {
+      border-color: rgba(15, 118, 110, 0.55);
+      background: #ffffff;
+      box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.11);
+    }
+
+    .filters {
+      display: flex;
+      gap: 6px;
+      padding: 0 20px 16px;
+      border-bottom: 1px solid var(--line-soft);
+      background: #ffffff;
+      overflow-x: auto;
+    }
+
+    .filter-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      height: 32px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--muted-strong);
+      font: 13px/1 inherit;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+    }
+
+    .filter-button span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .filter-button:hover,
+    .filter-button[aria-pressed="true"] {
+      border-color: rgba(15, 118, 110, 0.28);
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+    }
+
+    .proxy-table {
+      width: 100%;
+    }
+
+    .table-head,
+    .proxy-row {
+      display: grid;
+      grid-template-columns: minmax(190px, 0.9fr) minmax(250px, 1.25fr) minmax(260px, 1.2fr) 96px;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .table-head {
+      padding: 11px 20px;
+      border-bottom: 1px solid var(--line-soft);
+      background: var(--surface-soft);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
     }
 
     .proxy-row {
-      display: grid;
-      grid-template-columns: minmax(120px, 0.8fr) minmax(220px, 1.4fr) minmax(220px, 1.5fr);
-      gap: 18px;
-      align-items: center;
-      padding: 18px;
-      border-top: 1px solid var(--line);
+      min-height: 74px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line-soft);
+      transition: background 150ms ease;
     }
 
-    .proxy-row:first-child {
-      border-top: 0;
+    .proxy-row:last-child {
+      border-bottom: 0;
+    }
+
+    .proxy-row:hover {
+      background: #fbfdfd;
     }
 
     .proxy-title {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       min-width: 0;
     }
 
-    .badge {
+    .prefix-mark {
       flex: 0 0 auto;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 32px;
-      height: 28px;
-      padding: 0 9px;
-      border-radius: 999px;
+      width: 38px;
+      height: 38px;
+      border-radius: var(--radius);
       background: var(--accent-soft);
       color: var(--accent);
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    .type {
-      min-width: 0;
-      color: var(--muted);
-      font-size: 13px;
-      overflow-wrap: anywhere;
-    }
-
-    .label {
-      display: block;
-      margin-bottom: 5px;
-      color: var(--muted);
-      font-size: 12px;
+      font-size: 15px;
+      font-weight: 760;
       text-transform: uppercase;
     }
 
+    .proxy-main {
+      min-width: 0;
+    }
+
+    .prefix {
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 710;
+      overflow-wrap: anywhere;
+    }
+
+    .type {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      margin-top: 6px;
+      padding: 3px 8px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 650;
+      line-height: 1.2;
+    }
+
+    .type-default {
+      border-color: var(--line);
+      background: #f7f9fa;
+      color: var(--muted-strong);
+    }
+
+    .type-pixiv {
+      border-color: #f4c6dd;
+      background: #fff0f7;
+      color: #a51d5d;
+    }
+
+    .type-github {
+      border-color: #c8d7ff;
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+
+    .type-docker {
+      border-color: #f2d49b;
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
+    .label {
+      display: none;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .url-stack {
+      min-width: 0;
+    }
+
+    .url-link {
+      display: inline-flex;
+      max-width: 100%;
+      min-width: 0;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .domain {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
     a {
-      color: var(--accent);
+      color: var(--accent-strong);
       text-decoration: none;
       overflow-wrap: anywhere;
     }
@@ -785,32 +1100,160 @@ function renderHome(url, config, request) {
     }
 
     code {
-      font: 13px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      color: #1d2939;
+      font: 12.5px/1.45 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
       overflow-wrap: anywhere;
     }
 
-    .empty {
-      padding: 28px 18px;
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .icon-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #ffffff;
+      color: var(--muted-strong);
+      cursor: pointer;
+      transition: transform 140ms ease, border-color 140ms ease, color 140ms ease, background 140ms ease;
+    }
+
+    .icon-button:hover,
+    .icon-button:focus-visible {
+      border-color: rgba(15, 118, 110, 0.32);
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+      outline: none;
+    }
+
+    .icon-button:active {
+      transform: translateY(1px);
+    }
+
+    .icon-button.copied {
+      border-color: rgba(22, 163, 74, 0.28);
+      background: #ecfdf3;
+      color: #15803d;
+    }
+
+    .empty,
+    .empty-state {
+      padding: 30px 20px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .empty-state[hidden],
+    .proxy-row[hidden] {
+      display: none;
+    }
+
+    .empty-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      margin-bottom: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-soft);
       color: var(--muted);
     }
 
+    .empty-title {
+      color: var(--text);
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
     @media (max-width: 760px) {
+      html,
+      body {
+        overflow-x: hidden;
+      }
+
       main {
-        width: min(100% - 24px, 1080px);
-        padding-top: 28px;
+        width: auto;
+        margin: 0 12px;
+        padding-top: 22px;
       }
 
       header {
         display: block;
       }
 
-      .count {
-        margin-top: 16px;
+      .summary {
+        display: block;
+        width: 100%;
+        margin-top: 18px;
+      }
+
+      .stat + .stat {
+        margin-top: 10px;
+      }
+
+      .stat {
+        min-height: 64px;
+        padding: 11px 10px;
+      }
+
+      .stat-value {
+        font-size: 21px;
+      }
+
+      .panel-head {
+        display: block;
+        padding: 16px;
+      }
+
+      .toolbar {
+        justify-content: stretch;
+        margin-top: 14px;
+      }
+
+      .search-box {
+        width: 100%;
+        min-width: 0;
+      }
+
+      .filters {
+        padding: 0 16px 14px;
+      }
+
+      .table-head {
+        display: none;
       }
 
       .proxy-row {
         grid-template-columns: 1fr;
-        gap: 12px;
+        gap: 14px;
+        padding: 17px 16px;
+      }
+
+      .label {
+        display: block;
+      }
+
+      .actions {
+        justify-content: flex-start;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
       }
     }
   </style>
@@ -818,17 +1261,146 @@ function renderHome(url, config, request) {
 <body>
   <main>
     <header>
-      <div>
-        <h1>Proxies AIO</h1>
-        <div class="meta">${escapeHtml(url.host)}</div>
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">${renderIcon("route")}</div>
+        <div>
+          <h1>Proxies AIO</h1>
+          <div class="meta"><span class="meta-dot" aria-hidden="true"></span>${escapeHtml(url.host)}</div>
+        </div>
       </div>
-      <div class="count">${config.proxies.length} proxies</div>
+      <div class="summary" aria-label="Proxy summary">
+        <div class="stat">
+          <div class="stat-label">Total</div>
+          <div class="stat-value" data-visible-count>${proxies.length}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Default</div>
+          <div class="stat-value">${defaultCount}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Special</div>
+          <div class="stat-value">${specialCount}</div>
+        </div>
+      </div>
     </header>
     ${configErrors}
-    <section class="proxy-list">
-      ${rows || '<div class="empty">No proxies configured.</div>'}
+    <section class="panel" aria-labelledby="proxy-list-title">
+      <div class="panel-head">
+        <div>
+          <h2 id="proxy-list-title">Proxy endpoints</h2>
+          <p class="panel-subtitle">Browse configured prefixes and upstream targets.</p>
+        </div>
+        <div class="toolbar">
+          <label class="search-box">
+            ${renderIcon("search")}
+            <input type="search" placeholder="Search prefix, type, or URL" autocomplete="off" data-search-input>
+          </label>
+        </div>
+      </div>
+      <div class="filters" aria-label="Proxy type filters">
+        <button class="filter-button" type="button" data-filter="all" aria-pressed="true">All <span>${proxies.length}</span></button>
+        ${typeFilters}
+      </div>
+      <div class="proxy-table">
+        <div class="table-head" aria-hidden="true">
+          <div>Prefix</div>
+          <div>Proxy URL</div>
+          <div>Source</div>
+          <div>Actions</div>
+        </div>
+        ${rows || '<div class="empty">No proxies configured.</div>'}
+        <div class="empty-state" data-empty-state hidden>
+          <div class="empty-icon" aria-hidden="true">${renderIcon("search")}</div>
+          <div class="empty-title">No matching proxies</div>
+          <p>Try a different prefix, type, or domain.</p>
+        </div>
+      </div>
     </section>
   </main>
+  <script>
+    const rows = Array.from(document.querySelectorAll("[data-proxy-row]"));
+    const searchInput = document.querySelector("[data-search-input]");
+    const filterButtons = Array.from(document.querySelectorAll("[data-filter]"));
+    const visibleCount = document.querySelector("[data-visible-count]");
+    const emptyState = document.querySelector("[data-empty-state]");
+    let activeFilter = "all";
+
+    function applyFilters() {
+      const query = (searchInput?.value || "").trim().toLowerCase();
+      let visible = 0;
+
+      for (const row of rows) {
+        const matchesText = !query || row.dataset.search.includes(query);
+        const matchesType = activeFilter === "all" || row.dataset.type === activeFilter;
+        const shouldShow = matchesText && matchesType;
+        row.hidden = !shouldShow;
+        if (shouldShow) {
+          visible += 1;
+        }
+      }
+
+      if (visibleCount) {
+        visibleCount.textContent = String(visible);
+      }
+
+      if (emptyState) {
+        emptyState.hidden = visible !== 0 || rows.length === 0;
+      }
+    }
+
+    searchInput?.addEventListener("input", applyFilters);
+
+    for (const button of filterButtons) {
+      button.addEventListener("click", () => {
+        activeFilter = button.dataset.filter || "all";
+        for (const option of filterButtons) {
+          option.setAttribute("aria-pressed", String(option === button));
+        }
+        applyFilters();
+      });
+    }
+
+    async function copyText(text, button) {
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          fallbackCopy(text);
+        }
+        button.classList.add("copied");
+        const label = button.getAttribute("aria-label") || "Copy";
+        button.setAttribute("aria-label", "Copied");
+        button.title = "Copied";
+        window.setTimeout(() => {
+          button.classList.remove("copied");
+          button.setAttribute("aria-label", label);
+          button.title = label;
+        }, 1200);
+      } catch {
+        fallbackCopy(text);
+      }
+    }
+
+    function fallbackCopy(text) {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.append(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-copy]");
+      if (!button) {
+        return;
+      }
+      copyText(button.dataset.copy, button);
+    });
+  </script>
 </body>
 </html>`,
     { request }
@@ -836,23 +1408,54 @@ function renderHome(url, config, request) {
 }
 
 function renderProxyRow(proxy) {
-  return `<article class="proxy-row">
-  <div>
-    <span class="label">Prefix</span>
-    <div class="proxy-title">
-      <span class="badge">${escapeHtml(proxy.prefix)}</span>
-      <span class="type">${escapeHtml(proxy.type)}</span>
+  const searchText = `${proxy.prefix} ${proxy.type} ${proxy.proxyUrl} ${proxy.site}`.toLowerCase();
+  const prefixInitial = proxy.prefix.slice(0, 2) || "?";
+  const sourceHost = displayHost(proxy.site);
+  const proxyHost = displayHost(proxy.proxyUrl);
+
+  return `<article class="proxy-row" data-proxy-row data-type="${escapeAttribute(proxy.type)}" data-search="${escapeAttribute(searchText)}">
+  <div class="proxy-title">
+    <span class="prefix-mark" aria-hidden="true">${escapeHtml(prefixInitial)}</span>
+    <div class="proxy-main">
+      <div class="prefix">/${escapeHtml(proxy.prefix)}/</div>
+      <div class="type type-${escapeAttribute(proxy.type)}">${escapeHtml(proxy.type)}</div>
     </div>
   </div>
-  <div>
+  <div class="url-stack">
     <span class="label">Proxy URL</span>
-    <a href="${escapeAttribute(proxy.proxyUrl)}"><code>${escapeHtml(proxy.proxyUrl)}</code></a>
+    <a class="url-link" href="${escapeAttribute(proxy.proxyUrl)}"><code>${escapeHtml(proxy.proxyUrl)}</code></a>
+    <div class="domain">${escapeHtml(proxyHost)}</div>
   </div>
-  <div>
+  <div class="url-stack">
     <span class="label">Source</span>
-    <a href="${escapeAttribute(proxy.site)}" rel="noreferrer"><code>${escapeHtml(proxy.site)}</code></a>
+    <a class="url-link" href="${escapeAttribute(proxy.site)}" rel="noreferrer"><code>${escapeHtml(proxy.site)}</code></a>
+    <div class="domain">${escapeHtml(sourceHost)}</div>
+  </div>
+  <div class="actions">
+    <button class="icon-button" type="button" title="Copy proxy URL" aria-label="Copy proxy URL" data-copy="${escapeAttribute(proxy.proxyUrl)}">${renderIcon("copy")}</button>
+    <a class="icon-button" href="${escapeAttribute(proxy.proxyUrl)}" target="_blank" rel="noreferrer" title="Open proxy URL" aria-label="Open proxy URL">${renderIcon("external")}</a>
   </div>
 </article>`;
+}
+
+function renderIcon(name) {
+  const icons = {
+    alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 4.4 2.8 17.2A2 2 0 0 0 4.5 20h15a2 2 0 0 0 1.7-2.8L13.7 4.4a2 2 0 0 0-3.4 0Z"/></svg>',
+    copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+    external: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/></svg>',
+    route: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M6 17V9a4 4 0 0 1 4-4h6"/><path d="M8 19h6a4 4 0 0 0 4-4V7"/></svg>',
+    search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>'
+  };
+
+  return icons[name] ?? "";
+}
+
+function displayHost(value) {
+  try {
+    return new URL(value).host;
+  } catch {
+    return value;
+  }
 }
 
 function renderNotFound(url, proxies) {
@@ -863,6 +1466,7 @@ function renderNotFound(url, proxies) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Proxy not found</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <style>
     body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: #f6f7f9; color: #111827; }
     main { width: min(720px, calc(100% - 32px)); margin: 12vh auto; }
@@ -889,6 +1493,7 @@ function renderErrorPage(title, errors) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(title)}</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 </head>
 <body>
   <h1>${escapeHtml(title)}</h1>
