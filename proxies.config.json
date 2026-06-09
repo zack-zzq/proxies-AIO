@@ -1,0 +1,57 @@
+[
+  {
+    "prefix": "google",
+    "site": "https://www.google.com"
+  },
+  {
+    "prefix": "duckduckgo-icons",
+    "site": "https://icons.duckduckgo.com"
+  },
+  {
+    "prefix": "pixiv",
+    "site": "https://i.pximg.net",
+    "type": "pixiv"
+  },
+  {
+    "prefix": "github",
+    "site": "https://github.com",
+    "type": "github"
+  },
+  {
+    "prefix": "docker",
+    "site": "https://registry-1.docker.io",
+    "type": "docker"
+  },
+  {
+    "prefix": "azure-models-inference",
+    "site": "https://models.inference.ai.azure.com"
+  },
+  {
+    "prefix": "ani-resources",
+    "site": "https://resources.ani.rip"
+  },
+  {
+    "prefix": "ani-api",
+    "site": "https://api.ani.rip"
+  },
+  {
+    "prefix": "googleapis-fonts",
+    "site": "https://fonts.googleapis.com"
+  },
+  {
+    "prefix": "google-trends",
+    "site": "https://trends.google.com"
+  },
+  {
+    "prefix": "xai-api",
+    "site": "https://api.x.ai"
+  },
+  {
+    "prefix": "googleapis-generativelanguage",
+    "site": "https://generativelanguage.googleapis.com"
+  },
+  {
+    "prefix": "openai-api",
+    "site": "https://api.openai.com"
+  }
+]

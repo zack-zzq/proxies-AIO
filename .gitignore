@@ -1,0 +1,8 @@
+node_modules/
+.wrangler/
+.dev.vars
+.npm-cache/
+.tmp/
+.wrangler-config/
+dist/
+package-lock.json
